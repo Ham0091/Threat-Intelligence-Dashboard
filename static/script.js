@@ -391,6 +391,23 @@ async function load_dashboard_stats() {
     }
 }
 
+// ===== MODALS =====
+const detailModal = document.getElementById('detail-modal');
+const modalClose = document.querySelector('.modal-close');
+
+if (modalClose) {
+    modalClose.addEventListener('click', () => {
+        detailModal.classList.add('hidden');
+    });
+}
+
+// Close modal when clicking outside (backdrop)
+detailModal.addEventListener('click', (e) => {
+    if (e.target === detailModal) {
+        detailModal.classList.add('hidden');
+    }
+});
+
 // ===== INITIALIZE =====
 setup_theme();
 load_dashboard_stats();
