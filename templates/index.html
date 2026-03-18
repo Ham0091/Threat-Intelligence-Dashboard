@@ -3,146 +3,262 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Threat Intelligence Command Center</title>
+    <title>Advanced Threat Intelligence Dashboard</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <div class="viewport">
-        <!-- TOP BAR -->
-        <header class="top-bar">
-            <div class="top-bar-content">
-                <div class="branding">
-                    <h1>🛡️ THREAT INTELLIGENCE COMMAND CENTER</h1>
-                    <p class="subtitle">Live OSINT Reconnaissance Engine</p>
+    <div class="app-container">
+        <!-- SIDEBAR NAVIGATION -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🛡️</span>
+                    <span class="logo-text">THREAT INTEL</span>
                 </div>
-                <div class="top-search-section">
-                    <form id="lookup-form" class="top-search-form">
-                        <input 
-                            id="query-input" 
-                            type="text" 
-                            placeholder="Enter IP address or domain..." 
-                            autocomplete="off" 
-                            required 
-                            class="top-search-input"
-                        />
-                        <button type="submit" class="btn btn-primary">🔍 Search</button>
-                        <button type="button" class="btn btn-secondary" id="defang-btn" title="Remove special chars from IP/domain">⚔️ Defang</button>
-                        <button type="button" class="btn btn-secondary" id="export-btn" title="Export results as JSON">📤 Export</button>
-                    </form>
-                    <div id="query-display" class="query-display"></div>
-                    <div id="status" class="status"></div>
+                <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">🌙</button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-section="dashboard">
+                    <span class="icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-section="lookup">
+                    <span class="icon">🔍</span>
+                    <span>Lookup</span>
+                </a>
+                <a href="#" class="nav-item" data-section="history">
+                    <span class="icon">📜</span>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item" data-section="analytics">
+                    <span class="icon">📈</span>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-item" data-section="settings">
+                    <span class="icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="threat-level">
+                    <span class="label">System Status</span>
+                    <span class="indicator online">●</span>
                 </div>
             </div>
-        </header>
+        </aside>
 
-        <!-- MAIN GRID CONTAINER -->
-        <main class="main-grid">
-            <!-- LEFT COLUMN: INPUT & TOOLS -->
-            <aside class="left-column">
-                <section class="card-container">
-                    <div class="card-header-compact">
-                        <h3>🔧 Bulk Log Parser</h3>
-                    </div>
-                    <div class="card-glass">
-                        <textarea 
-                            id="bulk-input" 
-                            class="bulk-textarea" 
-                            placeholder="Paste log lines, URLs, IPs, or domains&#10;(one per line)&#10;&#10;Example:&#10;192.168.1.1&#10;malicious.com&#10;10.0.0.5"
-                        ></textarea>
-                        <div class="button-group">
-                            <button class="btn btn-teal" id="extract-btn">📋 Extract IOCs</button>
-                            <button class="btn btn-amber" id="bulk-scan-btn">🎯 Bulk Scan</button>
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- TOP BAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 id="page-title">Threat Intelligence Dashboard</h1>
+                </div>
+                <div class="topbar-right">
+                    <span class="time-display" id="time-display"></span>
+                </div>
+            </header>
+
+            <!-- CONTENT AREAS -->
+            <div class="content-wrapper">
+                <!-- DASHBOARD SECTION -->
+                <section id="dashboard-section" class="content-section active">
+                    <div class="dashboard-grid">
+                        <!-- Stats Cards -->
+                        <div class="stats-row">
+                            <div class="stat-card">
+                                <div class="stat-icon">📋</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Total Scans</div>
+                                    <div class="stat-value" id="stat-total-scans">0</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">⚠️</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Avg Threat Score</div>
+                                    <div class="stat-value" id="stat-avg-score">0.0</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">🌐</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Domains Scanned</div>
+                                    <div class="stat-value" id="stat-domains">0</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">🖥️</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">IPs Scanned</div>
+                                    <div class="stat-value" id="stat-ips">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Access -->
+                        <div class="quick-search-card">
+                            <h3>Quick Lookup</h3>
+                            <form id="quick-lookup-form" class="quick-form">
+                                <input 
+                                    id="quick-query" 
+                                    type="text" 
+                                    placeholder="Enter IP, domain, or URL..." 
+                                    class="input-field"
+                                />
+                                <button type="submit" class="btn-primary">🔍 Scan</button>
+                            </form>
+                        </div>
+
+                        <!-- Recent Scans -->
+                        <div class="recent-card">
+                            <h3>Recent Scans</h3>
+                            <div id="recent-scans-list" class="scans-list">
+                                <p class="empty-state">No scans yet</p>
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                <section class="card-container">
-                    <div class="card-header-compact">
-                        <h3>📊 Scan History</h3>
+                <!-- LOOKUP SECTION -->
+                <section id="lookup-section" class="content-section">
+                    <div class="lookup-container">
+                        <!-- Search Bar -->
+                        <div class="search-box">
+                            <form id="lookup-form" class="search-form">
+                                <input 
+                                    id="query-input" 
+                                    type="text" 
+                                    placeholder="Enter IP address, domain, or URL..." 
+                                    class="search-input"
+                                    autocomplete="off"
+                                />
+                                <div class="search-controls">
+                                    <button type="submit" class="btn-primary">🔍 Analyze</button>
+                                    <button type="button" class="btn-secondary" id="defang-btn">⚔️ Defang</button>
+                                    <button type="button" class="btn-secondary" id="clear-btn">🗑️ Clear</button>
+                                </div>
+                            </form>
+                            <div id="search-status" class="status-message"></div>
+                        </div>
+
+                        <!-- Threat Score Widget -->
+                        <div id="threat-widget" class="threat-widget hidden">
+                            <div class="threat-score-display">
+                                <div class="score-circle">
+                                    <div id="threat-score-value" class="score-value">0</div>
+                                    <div class="score-label">Threat Score</div>
+                                </div>
+                                <div class="threat-indicator">
+                                    <div id="threat-level" class="threat-level-indicator"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Results Grid -->
+                        <div id="results-grid" class="results-grid">
+                            <!-- Results will be populated here -->
+                        </div>
                     </div>
-                    <div class="card-glass">
+                </section>
+
+                <!-- HISTORY SECTION -->
+                <section id="history-section" class="content-section">
+                    <div class="history-container">
+                        <h2>Scan History</h2>
+                        <div class="history-controls">
+                            <input type="text" id="history-search" placeholder="Search history..." class="input-field" />
+                            <button id="history-clear" class="btn-secondary">🗑️ Clear All</button>
+                        </div>
                         <div id="history-list" class="history-list">
-                            <p class="placeholder">No scans yet.</p>
+                            <p class="empty-state">No history yet</p>
                         </div>
                     </div>
                 </section>
-            </aside>
 
-            <!-- CENTER COLUMNS: LIVE INTELLIGENCE -->
-            <section class="center-columns">
-                <!-- VirusTotal Card -->
-                <article id="vt-card" class="card-container card-intelligence">
-                    <div class="card-header-glass">
-                        <h3>🔴 VirusTotal</h3>
-                        <span class="card-icon">🔍</span>
-                    </div>
-                    <div class="card-glass">
-                        <div id="vt-content" class="card-content">
-                            <p class="placeholder">No data yet.</p>
+                <!-- ANALYTICS SECTION -->
+                <section id="analytics-section" class="content-section">
+                    <div class="analytics-container">
+                        <h2>Analytics & Insights</h2>
+                        <div class="analytics-grid">
+                            <div class="chart-container">
+                                <h3>Query Types Distribution</h3>
+                                <canvas id="chart-query-types"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h3>Threat Score Distribution</h3>
+                                <canvas id="chart-threat-distribution"></canvas>
+                            </div>
+                            <div class="insights-card">
+                                <h3>Key Insights</h3>
+                                <ul id="insights-list">
+                                    <li>Loading insights...</li>
+                                </ul>
+                            </div>
                         </div>
-                    </div>
-                </article>
-
-                <!-- AbuseIPDB Card -->
-                <article id="abuse-card" class="card-container card-intelligence">
-                    <div class="card-header-glass">
-                        <h3>💀 AbuseIPDB</h3>
-                        <span class="card-icon">⚠️</span>
-                    </div>
-                    <div class="card-glass">
-                        <div id="abuse-content" class="card-content">
-                            <p class="placeholder">No data yet.</p>
-                        </div>
-                    </div>
-                </article>
-
-                <!-- Shodan Card -->
-                <article id="shodan-card" class="card-container card-intelligence">
-                    <div class="card-header-glass">
-                        <h3>🛰️ Shodan</h3>
-                        <span class="card-icon">📡</span>
-                    </div>
-                    <div class="card-glass">
-                        <div id="shodan-content" class="card-content">
-                            <p class="placeholder">No data yet.</p>
-                        </div>
-                    </div>
-                </article>
-            </section>
-
-            <!-- RIGHT COLUMN: ADVANCED CONTEXT -->
-            <aside class="right-column">
-                <!-- GreyNoise Context -->
-                <section class="card-container">
-                    <div class="card-header-compact">
-                        <h3>🌫️ GreyNoise</h3>
-                    </div>
-                    <div class="card-glass placeholder-card">
-                        <p class="placeholder">Coming soon: Noise classification & threat context</p>
                     </div>
                 </section>
 
-                <!-- SecurityTrails / Passive DNS -->
-                <section class="card-container">
-                    <div class="card-header-compact">
-                        <h3>🔗 Passive DNS</h3>
-                    </div>
-                    <div class="card-glass placeholder-card">
-                        <p class="placeholder">Coming soon: DNS history (SecurityTrails)</p>
+                <!-- SETTINGS SECTION -->
+                <section id="settings-section" class="content-section">
+                    <div class="settings-container">
+                        <h2>Settings & Configuration</h2>
+                        <div class="settings-grid">
+                            <div class="settings-card">
+                                <h3>🔐 API Keys</h3>
+                                <p class="description">Configure your threat intelligence API keys</p>
+                                <div class="settings-form">
+                                    <label>VirusTotal API Key</label>
+                                    <input type="password" id="vt-key" placeholder="Enter API key" class="input-field" />
+                                    <label>AbuseIPDB API Key</label>
+                                    <input type="password" id="abuse-key" placeholder="Enter API key" class="input-field" />
+                                    <label>Shodan API Key</label>
+                                    <input type="password" id="shodan-key" placeholder="Enter API key" class="input-field" />
+                                    <button class="btn-primary">💾 Save Keys</button>
+                                </div>
+                            </div>
+                            <div class="settings-card">
+                                <h3>⚙️ Preferences</h3>
+                                <div class="settings-form">
+                                    <label>
+                                        <input type="checkbox" id="auto-refresh" /> Auto-refresh history
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" id="notifications" checked /> Enable notifications
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" id="cache-results" checked /> Cache results
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="settings-card">
+                                <h3>📋 Data Management</h3>
+                                <button class="btn-secondary">📤 Export All Data</button>
+                                <button class="btn-secondary">🔄 Reset Settings</button>
+                                <button class="btn-danger">🗑️ Clear All Data</button>
+                            </div>
+                        </div>
                     </div>
                 </section>
-
-                <!-- Vis.js Relationship Graph -->
-                <section class="card-container">
-                    <div class="card-header-compact">
-                        <h3>🕸️ Relationships</h3>
-                    </div>
-                    <div class="card-glass placeholder-card">
-                        <p class="placeholder">Coming soon: Visual relationship graph</p>
-                    </div>
-                </section>
-            </aside>
+            </div>
         </main>
+    </div>
+
+    <!-- MODALS -->
+    <div id="loading-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="spinner"></div>
+            <p>Analyzing threat intelligence...</p>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="modal">
+        <div class="modal-content large">
+            <button class="modal-close">&times;</button>
+            <div id="modal-body"></div>
+        </div>
     </div>
 
     <script src="/static/script.js"></script>
