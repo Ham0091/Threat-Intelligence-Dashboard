@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-VT_API_KEY = os.getenv('VIRUSTOTAL_API_KEY')
+VT_API_KEY = os.getenv('VT_API_KEY')
 ABUSEIPDB_API_KEY = os.getenv('ABUSEIPDB_API_KEY')
 SHODAN_API_KEY = os.getenv('SHODAN_API_KEY')
 URLHAUS_API_KEY = os.getenv('URLHAUS_API_KEY', 'public')
@@ -68,11 +68,19 @@ def resolve_domain_to_ip(query: str) -> str:
     """Resolve a domain to an IP address. If query is already an IP, return it."""
     if re.match(IP_REGEX, query):
         return query
+    # Extract domain from URL if needed
+    domain = query
+    if query.startswith('http://') or query.startswith('https://'):
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(query).netloc
+        except:
+            domain = query
     try:
-        ip = socket.gethostbyname(query)
+        ip = socket.gethostbyname(domain)
         return ip
-    except socket.gaierror as e:
-        raise ValueError(f'Could not resolve domain "{query}" to IP address.')
+    except socket.gaierror:
+        raise ValueError(f'Could not resolve domain "{domain}" to IP address.')
 
 
 def is_valid_query(query: str) -> bool:
@@ -159,9 +167,22 @@ def query_virustotal(query: str) -> dict:
     if not VT_API_KEY:
         raise ValueError('VirusTotal API key not configured')
 
-    url = f'https://www.virustotal.com/api/v3/ip_addresses/{query}' if re.match(IP_REGEX, query) else f'https://www.virustotal.com/api/v3/domains/{query}'
+    # Extract domain from URL if necessary
+    check_query = query
+    if query.startswith('http://') or query.startswith('https://'):
+        try:
+            from urllib.parse import urlparse
+            check_query = urlparse(query).netloc
+        except:
+            check_query = query
+    
+    if re.match(IP_REGEX, check_query):
+        api_url = f'https://www.virustotal.com/api/v3/ip_addresses/{check_query}'
+    else:
+        api_url = f'https://www.virustotal.com/api/v3/domains/{check_query}'
+    
     headers = {'x-apikey': VT_API_KEY}
-    resp = requests.get(url, headers=headers, timeout=15)
+    resp = requests.get(api_url, headers=headers, timeout=15)
     resp.raise_for_status()
     data = resp.json().get('data', {})
 
