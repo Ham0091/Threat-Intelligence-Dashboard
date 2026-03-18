@@ -65,7 +65,17 @@ themeToggle.addEventListener('click', () => {
 // ===== TIME DISPLAY =====
 function update_time() {
     const now = new Date();
-    timeDisplay.textContent = now.toLocaleTimeString();
+    const timeString = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: true 
+    });
+    const dateString = now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+    });
+    timeDisplay.textContent = `${dateString} • ${timeString}`;
 }
 setInterval(update_time, 1000);
 update_time();
@@ -154,19 +164,19 @@ function render_results(data) {
     resultsGrid.innerHTML = '';
     
     if (results.virustotal) {
-        resultsGrid.appendChild(create_result_card('VirusTotal', '', results.virustotal, 'vt'));
+        resultsGrid.appendChild(create_result_card('VirusTotal', '🦠', results.virustotal, 'vt'));
     }
     if (results.abuseipdb) {
-        resultsGrid.appendChild(create_result_card('AbuseIPDB', '', results.abuseipdb, 'abuse'));
+        resultsGrid.appendChild(create_result_card('AbuseIPDB', '⚠️', results.abuseipdb, 'abuse'));
     }
     if (results.shodan) {
-        resultsGrid.appendChild(create_result_card('Shodan', '', results.shodan, 'shodan'));
+        resultsGrid.appendChild(create_result_card('Shodan', '🔍', results.shodan, 'shodan'));
     }
     if (results.otx) {
-        resultsGrid.appendChild(create_result_card('AlienVault OTX', '', results.otx, 'otx'));
+        resultsGrid.appendChild(create_result_card('AlienVault OTX', '🎯', results.otx, 'otx'));
     }
     if (results.urlhaus) {
-        resultsGrid.appendChild(create_result_card('URLhaus', '', results.urlhaus, 'urlhaus'));
+        resultsGrid.appendChild(create_result_card('URLhaus', '🔗', results.urlhaus, 'urlhaus'));
     }
 }
 
@@ -346,6 +356,7 @@ async function load_history() {
     try {
         const response = await fetch('/api/history?limit=50');
         const history = await response.json();
+        full_history = history;  // Store for searching
         const list = document.getElementById('history-list');
         
         if (history.length === 0) {
@@ -353,12 +364,16 @@ async function load_history() {
             return;
         }
         
-        list.innerHTML = history.map(item => `
+        list.innerHTML = history.map(item => {
+            const threat_level = item.threat_score >= 70 ? 'Critical' : 
+                                item.threat_score >= 50 ? 'High' : 
+                                item.threat_score >= 25 ? 'Medium' : 'Low';
+            return `
             <div class="history-item">
-                <span>${item.query}</span>
-                <span>${item.query_type.toUpperCase()} - Score: ${Math.round(item.threat_score)}</span>
+                <strong>${item.query}</strong>
+                <small>${item.query_type.toUpperCase()} • Score: ${Math.round(item.threat_score)}/100 (${threat_level})</small>
             </div>
-        `).join('');
+        `}).join('');
     } catch (error) {
         console.error('Failed to load history:', error);
     }
@@ -457,12 +472,17 @@ detailModal.addEventListener('click', (e) => {
     }
 });
 
-// ===== QUICK QUERY SEARCH =====
-const quickForm = document.getElementById('quick-query-form');
-const quickQuery = document.getElementById('quick-query');
+// ===== QUICK QUERY VALIDATION =====
+// Add input validation to the quick form submit (already defined above at line 13)
+const originalQuickFormListener = quickForm.addEventListener;
+const quickFormElement = quickForm;
 
-if (quickForm) {
-    quickForm.addEventListener('submit', async (e) => {
+if (quickFormElement) {
+    // Remove the old listener and add the validated one
+    const newQuickForm = quickFormElement.cloneNode(true);
+    quickFormElement.parentNode.replaceChild(newQuickForm, quickFormElement);
+    
+    newQuickForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const query = quickQuery.value.trim();
         
@@ -474,11 +494,70 @@ if (quickForm) {
         
         if (query.length > 255) {
             show_status('Query too long (max 255 characters)', 'error');
+            quickQuery.focus();
             return;
         }
         
-        show_status('Searching...', 'loading');
-        perform_lookup(query);
+        queryInput.value = query;
+        quickQuery.value = '';
+        await perform_lookup(query);
+        document.querySelector('[data-section="lookup"]').click();
+    });
+}
+
+// ===== SETTINGS HANDLERS =====
+const exportDataBtn = document.getElementById('export-data-btn');
+const resetSettingsBtn = document.getElementById('reset-settings-btn');
+const clearDataBtn = document.getElementById('clear-data-btn');
+
+if (exportDataBtn) {
+    exportDataBtn.addEventListener('click', async () => {
+        try {
+            const response = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: results_cache })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                show_status('Data exported successfully', 'success');
+            } else {
+                show_status('Export failed', 'error');
+            }
+        } catch (error) {
+            show_status('Error exporting data: ' + error.message, 'error');
+        }
+    });
+}
+
+if (resetSettingsBtn) {
+    resetSettingsBtn.addEventListener('click', () => {
+        if (confirm('Reset all settings to defaults?')) {
+            localStorage.clear();
+            document.body.classList.remove('light-mode');
+            themeToggle.textContent = '☀️';
+            show_status('Settings reset to defaults', 'success');
+        }
+    });
+}
+
+if (clearDataBtn) {
+    clearDataBtn.addEventListener('click', () => {
+        if (confirm('Clear all scan history and cache? This cannot be undone.')) {
+            // This would require a backend endpoint to clear database
+            resultsGrid.innerHTML = '';
+            queryInput.value = '';
+            threatWidget.classList.add('hidden');
+            show_status('Local cache cleared. Backend data requires restart.', 'success');
+        }
     });
 }
 

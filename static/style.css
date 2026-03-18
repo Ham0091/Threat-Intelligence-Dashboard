@@ -175,6 +175,14 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    margin: 0;
+}
+
+.topbar-right {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.5px;
 }
 
 .content-wrapper {
@@ -413,6 +421,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    margin: 0.5rem 0.5rem 0.5rem 0;
 }
 
 .btn-primary {
@@ -425,6 +434,10 @@ body {
     box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
 }
 
+.btn-primary:active {
+    transform: translateY(0);
+}
+
 .btn-secondary {
     background: var(--tertiary-dark);
     color: var(--text-primary);
@@ -434,12 +447,18 @@ body {
 .btn-secondary:hover {
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.1);
 }
 
 .btn-danger {
     background: rgba(239, 68, 68, 0.15);
     color: var(--accent-red);
     border: 1px solid rgba(255,255,255,0.08);
+}
+
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: var(--accent-red);
 }
 
 .modal {
@@ -515,11 +534,56 @@ body {
     padding: 1.5rem;
 }
 
+.settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.settings-card h3 {
+    margin: 0;
+    margin-bottom: 0.5rem;
+}
+
+.settings-card button {
+    width: auto;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.settings-form label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-form input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent-cyan);
+}
+
 .history-controls {
     display: flex;
     gap: 0.75rem;
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
+}
+
+.history-controls input {
+    flex: 1;
+    min-width: 250px;
+}
+
+.history-controls button {
+    white-space: nowrap;
 }
 
 .history-list {
@@ -534,14 +598,28 @@ body {
     background: var(--secondary-dark);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: 1rem;
     cursor: pointer;
     transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .history-item:hover {
     border-color: var(--accent-cyan);
     background: var(--tertiary-dark);
+}
+
+.history-item strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.history-item small {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
 }
 
 .empty-state {
@@ -584,3 +662,156 @@ body {
 ::-webkit-scrollbar-track { background: var(--tertiary-dark); }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
+
+/* ===== STATUS MESSAGES ===== */
+.status-message {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: none;
+}
+
+.status-message.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    display: block;
+}
+
+.status-message.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    display: block;
+}
+
+.status-message.loading {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    display: block;
+}
+
+/* ===== THREAT BADGES ===== */
+.threat-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.threat-badge.critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.threat-badge.high {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.threat-badge.medium {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent-blue);
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.threat-badge.low {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+/* ===== LIGHT MODE ===== */
+body.light-mode {
+    --primary-dark: #f8fafc;
+    --secondary-dark: #f1f5f9;
+    --tertiary-dark: #e2e8f0;
+    --border-light: rgba(0, 0, 0, 0.08);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+}
+
+body.light-mode .sidebar,
+body.light-mode .topbar,
+body.light-mode .search-box,
+body.light-mode .quick-search-card,
+body.light-mode .recent-card,
+body.light-mode .stat-card,
+body.light-mode .result-card,
+body.light-mode .history-item,
+body.light-mode .insights-card,
+body.light-mode .settings-card,
+body.light-mode .chart-container,
+body.light-mode .threat-widget {
+    background: var(--secondary-dark);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode .input-field,
+body.light-mode .search-input {
+    background: var(--tertiary-dark);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: var(--text-primary);
+}
+
+body.light-mode button {
+    color: var(--text-primary);
+}
+
+body.light-mode .modal {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+body.light-mode .modal-content {
+    background: var(--secondary-dark);
+    color: var(--text-primary);
+}
+
+body.light-mode ::-webkit-scrollbar-track {
+    background: var(--tertiary-dark);
+}
+
+body.light-mode ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-cyan);
+}
+
+/* ===== ENHANCED SPACING & PADDING ===== */
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.result-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.history-item span {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.history-item span:first-child {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.history-item span:last-child {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
