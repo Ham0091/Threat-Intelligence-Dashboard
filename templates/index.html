@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Threat Intelligence Command Center</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <div class="viewport">
+        <!-- TOP BAR -->
+        <header class="top-bar">
+            <div class="top-bar-content">
+                <div class="branding">
+                    <h1>🛡️ THREAT INTELLIGENCE COMMAND CENTER</h1>
+                    <p class="subtitle">Live OSINT Reconnaissance Engine</p>
+                </div>
+                <div class="top-search-section">
+                    <form id="lookup-form" class="top-search-form">
+                        <input 
+                            id="query-input" 
+                            type="text" 
+                            placeholder="Enter IP address or domain..." 
+                            autocomplete="off" 
+                            required 
+                            class="top-search-input"
+                        />
+                        <button type="submit" class="btn btn-primary">🔍 Search</button>
+                        <button type="button" class="btn btn-secondary" id="defang-btn" title="Remove special chars from IP/domain">⚔️ Defang</button>
+                        <button type="button" class="btn btn-secondary" id="export-btn" title="Export results as JSON">📤 Export</button>
+                    </form>
+                    <div id="query-display" class="query-display"></div>
+                    <div id="status" class="status"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN GRID CONTAINER -->
+        <main class="main-grid">
+            <!-- LEFT COLUMN: INPUT & TOOLS -->
+            <aside class="left-column">
+                <section class="card-container">
+                    <div class="card-header-compact">
+                        <h3>🔧 Bulk Log Parser</h3>
+                    </div>
+                    <div class="card-glass">
+                        <textarea 
+                            id="bulk-input" 
+                            class="bulk-textarea" 
+                            placeholder="Paste log lines, URLs, IPs, or domains&#10;(one per line)&#10;&#10;Example:&#10;192.168.1.1&#10;malicious.com&#10;10.0.0.5"
+                        ></textarea>
+                        <div class="button-group">
+                            <button class="btn btn-teal" id="extract-btn">📋 Extract IOCs</button>
+                            <button class="btn btn-amber" id="bulk-scan-btn">🎯 Bulk Scan</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card-container">
+                    <div class="card-header-compact">
+                        <h3>📊 Scan History</h3>
+                    </div>
+                    <div class="card-glass">
+                        <div id="history-list" class="history-list">
+                            <p class="placeholder">No scans yet.</p>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- CENTER COLUMNS: LIVE INTELLIGENCE -->
+            <section class="center-columns">
+                <!-- VirusTotal Card -->
+                <article id="vt-card" class="card-container card-intelligence">
+                    <div class="card-header-glass">
+                        <h3>🔴 VirusTotal</h3>
+                        <span class="card-icon">🔍</span>
+                    </div>
+                    <div class="card-glass">
+                        <div id="vt-content" class="card-content">
+                            <p class="placeholder">No data yet.</p>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- AbuseIPDB Card -->
+                <article id="abuse-card" class="card-container card-intelligence">
+                    <div class="card-header-glass">
+                        <h3>💀 AbuseIPDB</h3>
+                        <span class="card-icon">⚠️</span>
+                    </div>
+                    <div class="card-glass">
+                        <div id="abuse-content" class="card-content">
+                            <p class="placeholder">No data yet.</p>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Shodan Card -->
+                <article id="shodan-card" class="card-container card-intelligence">
+                    <div class="card-header-glass">
+                        <h3>🛰️ Shodan</h3>
+                        <span class="card-icon">📡</span>
+                    </div>
+                    <div class="card-glass">
+                        <div id="shodan-content" class="card-content">
+                            <p class="placeholder">No data yet.</p>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+            <!-- RIGHT COLUMN: ADVANCED CONTEXT -->
+            <aside class="right-column">
+                <!-- GreyNoise Context -->
+                <section class="card-container">
+                    <div class="card-header-compact">
+                        <h3>🌫️ GreyNoise</h3>
+                    </div>
+                    <div class="card-glass placeholder-card">
+                        <p class="placeholder">Coming soon: Noise classification & threat context</p>
+                    </div>
+                </section>
+
+                <!-- SecurityTrails / Passive DNS -->
+                <section class="card-container">
+                    <div class="card-header-compact">
+                        <h3>🔗 Passive DNS</h3>
+                    </div>
+                    <div class="card-glass placeholder-card">
+                        <p class="placeholder">Coming soon: DNS history (SecurityTrails)</p>
+                    </div>
+                </section>
+
+                <!-- Vis.js Relationship Graph -->
+                <section class="card-container">
+                    <div class="card-header-compact">
+                        <h3>🕸️ Relationships</h3>
+                    </div>
+                    <div class="card-glass placeholder-card">
+                        <p class="placeholder">Coming soon: Visual relationship graph</p>
+                    </div>
+                </section>
+            </aside>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
