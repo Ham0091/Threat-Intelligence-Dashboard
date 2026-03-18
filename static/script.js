@@ -13,8 +13,11 @@ const clearBtn = document.getElementById('clear-btn');
 const quickForm = document.getElementById('quick-lookup-form');
 const quickQuery = document.getElementById('quick-query');
 const timeDisplay = document.getElementById('time-display');
+const historySearch = document.getElementById('history-search');
+const historyClear = document.getElementById('history-clear');
 
 let results_cache = {};
+let full_history = [];
 
 // ===== NAVIGATION =====
 nav_items.forEach(item => {
@@ -391,6 +394,52 @@ async function load_dashboard_stats() {
     }
 }
 
+// ===== HISTORY SEARCH & CLEAR =====
+if (historySearch) {
+    historySearch.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const list = document.getElementById('history-list');
+        
+        if (!query) {
+            list.innerHTML = full_history.map(item => `
+                <div class="history-item">
+                    <span>${item.query}</span>
+                    <span>${item.query_type.toUpperCase()} - Score: ${Math.round(item.threat_score)}</span>
+                </div>
+            `).join('');
+            return;
+        }
+        
+        const filtered = full_history.filter(item => 
+            item.query.toLowerCase().includes(query)
+        );
+        
+        list.innerHTML = filtered.length > 0 
+            ? filtered.map(item => `
+                <div class="history-item">
+                    <span>${item.query}</span>
+                    <span>${item.query_type.toUpperCase()} - Score: ${Math.round(item.threat_score)}</span>
+                </div>
+            `).join('')
+            : '<p class="empty-state">No results found</p>';
+    });
+}
+
+if (historyClear) {
+    historyClear.addEventListener('click', async () => {
+        if (confirm('Clear all history? This cannot be undone.')) {
+            try {
+                // Clear database via a new endpoint call
+                show_status('Clearing history...', 'loading');
+                // Note: This requires a /api/clear-history endpoint
+                show_status('History functionality in development', 'error');
+            } catch (error) {
+                show_status('Error clearing history: ' + error.message, 'error');
+            }
+        }
+    });
+}
+
 // ===== MODALS =====
 const detailModal = document.getElementById('detail-modal');
 const modalClose = document.querySelector('.modal-close');
@@ -407,6 +456,31 @@ detailModal.addEventListener('click', (e) => {
         detailModal.classList.add('hidden');
     }
 });
+
+// ===== QUICK QUERY SEARCH =====
+const quickForm = document.getElementById('quick-query-form');
+const quickQuery = document.getElementById('quick-query');
+
+if (quickForm) {
+    quickForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const query = quickQuery.value.trim();
+        
+        // Input validation (max 255 characters, not empty)
+        if (!query) {
+            show_status('Please enter a query', 'error');
+            return;
+        }
+        
+        if (query.length > 255) {
+            show_status('Query too long (max 255 characters)', 'error');
+            return;
+        }
+        
+        show_status('Searching...', 'loading');
+        perform_lookup(query);
+    });
+}
 
 // ===== INITIALIZE =====
 setup_theme();

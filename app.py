@@ -4,13 +4,13 @@ import socket
 import requests
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from pathlib import Path
-from sqlalchemy import create_engine, Column, String, DateTime, Float, Integer, Text, JSON
+from sqlalchemy import create_engine, Column, String, DateTime, Float, Integer, Text, JSON, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -41,7 +41,7 @@ class ScanResult(Base):
     query_type = Column(String(10))  # 'ip', 'domain', 'url'
     threat_score = Column(Float, default=0.0)
     results = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     expires_at = Column(DateTime)
 
 Base.metadata.create_all(engine)
@@ -79,6 +79,8 @@ def is_valid_query(query: str) -> bool:
     query = query.strip()
     if not query:
         return False
+    if len(query) > 255:
+        return False
     if re.match(URL_REGEX, query):
         return True
     if re.match(IP_REGEX, query):
@@ -94,7 +96,7 @@ def get_cached_result(query_hash: str) -> dict:
     session = Session()
     result = session.query(ScanResult).filter(
         ScanResult.query_hash == query_hash,
-        ScanResult.expires_at > datetime.utcnow()
+        ScanResult.expires_at > datetime.now(timezone.utc)
     ).first()
     session.close()
     return result.results if result else None
@@ -110,7 +112,7 @@ def cache_result(query: str, query_type: str, threat_score: float, results: dict
         query_type=query_type,
         threat_score=threat_score,
         results=results,
-        expires_at=datetime.utcnow() + timedelta(seconds=CACHE_TTL)
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL)
     )
     session.add(scan)
     session.commit()
@@ -340,7 +342,7 @@ def lookup():
         'threat_score': threat_score,
         'query': query,
         'query_type': query_type,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'errors': errors if errors else None
     }
     cache_result(query, query_type, threat_score, response_data)
@@ -374,13 +376,11 @@ def get_stats():
     session = Session()
     
     total_scans = session.query(ScanResult).count()
-    avg_threat_score = session.query(
-        __import__('sqlalchemy').func.avg(ScanResult.threat_score)
-    ).scalar() or 0
+    avg_threat_score = session.query(func.avg(ScanResult.threat_score)).scalar() or 0
     
     query_type_counts = session.query(
         ScanResult.query_type,
-        __import__('sqlalchemy').func.count(ScanResult.id)
+        func.count(ScanResult.id)
     ).group_by(ScanResult.query_type).all()
     
     session.close()
@@ -401,7 +401,7 @@ def export_results():
     if not data:
         return jsonify({'error': 'No data to export'}), 400
     
-    filename = f"threat_intel_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"threat_intel_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
     
     return jsonify({
         'success': True,
