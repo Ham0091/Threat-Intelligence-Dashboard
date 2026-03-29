@@ -5,14 +5,14 @@ import requests
 import json
 import hashlib
 from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from dotenv import load_dotenv
 from pathlib import Path
 from sqlalchemy import create_engine, Column, String, DateTime, Float, Integer, Text, JSON, func
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -31,6 +31,19 @@ db_path = Path(__file__).parent / 'threat_intel.db'
 engine = create_engine(f'sqlite:///{db_path}', echo=False)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
+
+@contextmanager
+def get_db_session():
+    """Context manager for database sessions - ensures proper cleanup"""
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 # Models
 class ScanResult(Base):
@@ -101,40 +114,40 @@ def is_valid_query(query: str) -> bool:
 
 def get_cached_result(query_hash: str) -> dict:
     """Check if we have a cached result that's still valid"""
-    session = Session()
-    result = session.query(ScanResult).filter(
-        ScanResult.query_hash == query_hash,
-        ScanResult.expires_at > datetime.now(timezone.utc)
-    ).first()
-    session.close()
-    return result.results if result else None
+    with get_db_session() as session:
+        result = session.query(ScanResult).filter(
+            ScanResult.query_hash == query_hash,
+            ScanResult.expires_at > datetime.now(timezone.utc)
+        ).first()
+        return result.results if result else None
 
 
 def cache_result(query: str, query_type: str, threat_score: float, results: dict):
     """Cache scan results"""
     query_hash = hashlib.sha256(query.lower().encode()).hexdigest()
-    session = Session()
-    scan = ScanResult(
-        query=query,
-        query_hash=query_hash,
-        query_type=query_type,
-        threat_score=threat_score,
-        results=results,
-        expires_at=datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL)
-    )
-    session.add(scan)
-    session.commit()
-    session.close()
+    with get_db_session() as session:
+        scan = ScanResult(
+            query=query,
+            query_hash=query_hash,
+            query_type=query_type,
+            threat_score=threat_score,
+            results=results,
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL)
+        )
+        session.add(scan)
 
 
 def calculate_threat_score(results: dict) -> float:
     """Calculate composite threat score (0-100)"""
     score = 0.0
     weight_counts = {
-        'virustotal': 0.35,
-        'abuseipdb': 0.35,
-        'shodan': 0.20,
-        'urlhaus': 0.10
+        'virustotal': 0.30,
+        'abuseipdb': 0.30,
+        'shodan': 0.15,
+        'urlhaus': 0.10,
+        'whois': 0.10,
+        'dns': 0.03,
+        'ssl': 0.02
     }
     
     # VirusTotal
@@ -159,6 +172,32 @@ def calculate_threat_score(results: dict) -> float:
     if results.get('urlhaus') and results['urlhaus'].get('valid'):
         urlhaus_score = results['urlhaus'].get('threat_score', 0)
         score += urlhaus_score * weight_counts['urlhaus']
+    
+    # WHOIS - check for domain age and registrar reputation (Phase 1)
+    if results.get('whois') and results['whois'].get('valid') and not results['whois'].get('is_ip'):
+        whois_score = 0
+        expiration = results['whois'].get('expiration_date', 'N/A')
+        # Penalize if expiration date is very close or recently expired (simple check)
+        if 'expiration_date' in results['whois'] and expiration != 'N/A':
+            whois_score = 5  # Low score for valid WHOIS data
+        score += whois_score * weight_counts['whois']
+    
+    # DNS - check for DNS availability (Phase 1)
+    if results.get('dns') and results['dns'].get('valid') and not results['dns'].get('is_ip'):
+        dns_score = 0
+        records = results['dns'].get('records', {})
+        # Penalize if no A records (indicates potential DNS issues)
+        if not records.get('A'):
+            dns_score = 10
+        score += dns_score * weight_counts['dns']
+    
+    # SSL - check for SSL certificate presence (Phase 1)
+    if results.get('ssl') and results['ssl'].get('valid') and not results['ssl'].get('is_ip'):
+        ssl_score = 0
+        # Penalize if no valid SSL certificate
+        if not results['ssl'].get('certificate'):
+            ssl_score = 15
+        score += ssl_score * weight_counts['ssl']
     
     return min(100, score)
 
@@ -301,6 +340,153 @@ def query_otx(query: str) -> dict:
         return {'valid': False, 'error': str(e)}
 
 
+def query_whois(domain: str) -> dict:
+    """Query WHOIS information for a domain"""
+    try:
+        import whois
+        
+        # Extract domain from URL if necessary
+        check_domain = domain
+        if domain.startswith('http://') or domain.startswith('https://'):
+            try:
+                from urllib.parse import urlparse
+                check_domain = urlparse(domain).netloc
+            except:
+                check_domain = domain
+        
+        # Skip WHOIS for IP addresses (they need IP WHOIS, not domain WHOIS)
+        if re.match(IP_REGEX, check_domain):
+            return {'valid': True, 'is_ip': True, 'raw': {}}
+        
+        # NOTE: signal.alarm() cannot be used reliably in worker threads.
+        # Rely on the caller to enforce timeouts via the thread/future API.
+        whois_data = whois.whois(check_domain)
+
+        return {
+            'valid': True,
+            'domain_name': whois_data.get('domain_name', [None])[0] if isinstance(whois_data.get('domain_name'), list) else whois_data.get('domain_name'),
+            'registrar': whois_data.get('registrar', 'N/A'),
+            'creation_date': str(whois_data.get('creation_date', 'N/A')),
+            'expiration_date': str(whois_data.get('expiration_date', 'N/A')),
+            'name_servers': whois_data.get('name_servers', []),
+            'registrant_country': whois_data.get('registrant_country', 'N/A'),
+            'raw': dict(whois_data),
+        }
+    except Exception as e:
+        return {'valid': False, 'error': str(e), 'raw': {}}
+
+
+def query_dns(domain: str) -> dict:
+    """Query DNS records for a domain"""
+    try:
+        import dns.resolver
+        
+        # Extract domain from URL if necessary
+        check_domain = domain
+        if domain.startswith('http://') or domain.startswith('https://'):
+            try:
+                from urllib.parse import urlparse
+                check_domain = urlparse(domain).netloc
+            except:
+                check_domain = domain
+        
+        # Skip DNS for IP addresses
+        if re.match(IP_REGEX, check_domain):
+            return {'valid': True, 'is_ip': True, 'raw': {}}
+        
+        resolver = dns.resolver.Resolver(timeout=5)
+        dns_records = {
+            'A': [],
+            'AAAA': [],
+            'MX': [],
+            'NS': [],
+            'TXT': [],
+            'SOA': []
+        }
+        
+        # Query each record type
+        for record_type in dns_records.keys():
+            try:
+                answers = resolver.resolve(check_domain, record_type)
+                dns_records[record_type] = [str(rdata) for rdata in answers]
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.Timeout):
+                pass
+            except Exception:
+                pass
+        
+        return {
+            'valid': True,
+            'records': dns_records,
+            'domain': check_domain,
+            'raw': dns_records,
+        }
+    except Exception as e:
+        return {'valid': False, 'error': str(e), 'raw': {}}
+
+
+def query_ssl(domain: str) -> dict:
+    """Query SSL certificate information for a domain"""
+    try:
+        import ssl
+        import socket
+        from OpenSSL import crypto
+        
+        # Extract domain from URL if necessary
+        check_domain = domain
+        if domain.startswith('http://') or domain.startswith('https://'):
+            try:
+                from urllib.parse import urlparse
+                check_domain = urlparse(domain).netloc
+            except:
+                check_domain = domain
+        
+        # Skip SSL check for IP addresses
+        if re.match(IP_REGEX, check_domain):
+            return {'valid': True, 'is_ip': True, 'raw': {}}
+        
+        context = ssl.create_default_context()
+        with socket.create_connection((check_domain, 443), timeout=5) as sock:
+            with context.wrap_socket(sock, server_hostname=check_domain) as ssock:
+                der_cert = ssock.getpeercert(binary_form=True)
+                x509 = crypto.load_certificate(crypto.FILETYPE_ASN1, der_cert)
+                
+                subject = dict(x509.get_subject().get_components())
+                issuer = dict(x509.get_issuer().get_components())
+                
+                # Convert bytes to strings
+                subject = {k.decode() if isinstance(k, bytes) else k: 
+                          v.decode() if isinstance(v, bytes) else v 
+                          for k, v in subject.items()}
+                issuer = {k.decode() if isinstance(k, bytes) else k: 
+                         v.decode() if isinstance(v, bytes) else v 
+                         for k, v in issuer.items()}
+                
+                cert_info = {
+                    'subject': subject,
+                    'issuer': issuer,
+                    'version': x509.get_version(),
+                    'serial_number': str(x509.get_serial_number()),
+                    'not_before': x509.get_notBefore().decode() if isinstance(x509.get_notBefore(), bytes) else str(x509.get_notBefore()),
+                    'not_after': x509.get_notAfter().decode() if isinstance(x509.get_notAfter(), bytes) else str(x509.get_notAfter()),
+                    'signature_algorithm': x509.get_signature_algorithm().decode() if isinstance(x509.get_signature_algorithm(), bytes) else str(x509.get_signature_algorithm()),
+                }
+                
+                return {
+                    'valid': True,
+                    'certificate': cert_info,
+                    'domain': check_domain,
+                    'raw': cert_info,
+                }
+    except socket.timeout:
+        return {'valid': False, 'error': 'SSL connection timeout', 'raw': {}}
+    except ConnectionRefusedError:
+        return {'valid': False, 'error': 'SSL connection refused (port 443 not open)', 'raw': {}}
+    except ssl.SSLError as e:
+        return {'valid': False, 'error': f'SSL error: {str(e)}', 'raw': {}}
+    except Exception as e:
+        return {'valid': False, 'error': str(e), 'raw': {}}
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -320,7 +506,13 @@ def lookup():
     # Check cache
     cached = get_cached_result(query_hash)
     if cached:
-        return jsonify({'results': cached, 'from_cache': True})
+        # Stored object is the full response_data dict; return it consistently
+        try:
+            cached['from_cache'] = True
+        except Exception:
+            # In case cached is not a dict, wrap it
+            cached = {'results': cached, 'from_cache': True}
+        return jsonify(cached)
 
     # Resolve domain to IP for services that need it
     resolved_ip = None
@@ -338,19 +530,38 @@ def lookup():
         tasks['abuseipdb'] = lambda: query_abuseipdb(resolved_ip)
         tasks['shodan'] = lambda: query_shodan(resolved_ip)
         tasks['otx'] = lambda: query_otx(query)
+        # Phase 1 APIs for domains
+        if query_type == 'domain':
+            tasks['whois'] = lambda: query_whois(query)
+            tasks['dns'] = lambda: query_dns(query)
+            tasks['ssl'] = lambda: query_ssl(query)
     elif query_type == 'url':
         tasks['virustotal'] = lambda: query_virustotal(query)
         tasks['urlhaus'] = lambda: query_urlhaus(query)
+        # Phase 1 APIs for URLs (extract domain first)
+        try:
+            from urllib.parse import urlparse
+            url_domain = urlparse(query).netloc
+            tasks['whois'] = lambda: query_whois(url_domain)
+            tasks['dns'] = lambda: query_dns(url_domain)
+            tasks['ssl'] = lambda: query_ssl(url_domain)
+        except:
+            pass
 
     results = {}
     errors = {}
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    # Choose a sensible number of workers based on tasks
+    num_workers = min(10, max(1, len(tasks)))
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
         future_to_source = {executor.submit(fn): source for source, fn in tasks.items()}
         for future in as_completed(future_to_source):
             source = future_to_source[future]
             try:
-                results[source] = future.result()
+                # Guard individual future result retrieval with a timeout
+                results[source] = future.result(timeout=30)
+            except FutureTimeoutError:
+                errors[source] = 'Timeout while querying source'
             except Exception as ex:
                 errors[source] = str(ex)
 
@@ -375,18 +586,17 @@ def lookup():
 def get_history():
     """Get scan history"""
     limit = request.args.get('limit', 50, type=int)
-    session = Session()
-    results = session.query(ScanResult).order_by(
-        ScanResult.created_at.desc()
-    ).limit(limit).all()
-    session.close()
-    
-    history = [{
-        'query': r.query,
-        'query_type': r.query_type,
-        'threat_score': r.threat_score,
-        'timestamp': r.created_at.isoformat()
-    } for r in results]
+    with get_db_session() as session:
+        results = session.query(ScanResult).order_by(
+            ScanResult.created_at.desc()
+        ).limit(limit).all()
+        
+        history = [{
+            'query': r.query,
+            'query_type': r.query_type,
+            'threat_score': r.threat_score,
+            'timestamp': r.created_at.isoformat()
+        } for r in results]
     
     return jsonify(history)
 
@@ -394,17 +604,14 @@ def get_history():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get dashboard statistics"""
-    session = Session()
-    
-    total_scans = session.query(ScanResult).count()
-    avg_threat_score = session.query(func.avg(ScanResult.threat_score)).scalar() or 0
-    
-    query_type_counts = session.query(
-        ScanResult.query_type,
-        func.count(ScanResult.id)
-    ).group_by(ScanResult.query_type).all()
-    
-    session.close()
+    with get_db_session() as session:
+        total_scans = session.query(ScanResult).count()
+        avg_threat_score = session.query(func.avg(ScanResult.threat_score)).scalar() or 0
+        
+        query_type_counts = session.query(
+            ScanResult.query_type,
+            func.count(ScanResult.id)
+        ).group_by(ScanResult.query_type).all()
     
     return jsonify({
         'total_scans': total_scans,

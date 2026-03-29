@@ -1,17 +1,12 @@
-// ADVANCED THREAT INTELLIGENCE DASHBOARD - JAVASCRIPT
+// THREAT INTELLIGENCE DASHBOARD - PROFESSIONAL UI
 
-const nav_items = document.querySelectorAll('.nav-item');
-const sections = document.querySelectorAll('.content-section');
 const queryInput = document.getElementById('query-input');
 const lookupForm = document.getElementById('lookup-form');
 const resultsGrid = document.getElementById('results-grid');
 const searchStatus = document.getElementById('search-status');
 const threatWidget = document.getElementById('threat-widget');
-const themeToggle = document.getElementById('theme-toggle');
 const defangBtn = document.getElementById('defang-btn');
 const clearBtn = document.getElementById('clear-btn');
-const quickForm = document.getElementById('quick-lookup-form');
-const quickQuery = document.getElementById('quick-query');
 const timeDisplay = document.getElementById('time-display');
 const historySearch = document.getElementById('history-search');
 const historyClear = document.getElementById('history-clear');
@@ -19,63 +14,19 @@ const historyClear = document.getElementById('history-clear');
 let results_cache = {};
 let full_history = [];
 
-// ===== NAVIGATION =====
-nav_items.forEach(item => {
-    item.addEventListener('click', (e) => {
-        e.preventDefault();
-        const target = item.getAttribute('data-section') + '-section';
-        
-        nav_items.forEach(i => i.classList.remove('active'));
-        sections.forEach(s => s.classList.remove('active'));
-        
-        item.classList.add('active');
-        document.getElementById(target).classList.add('active');
-        
-        // Update page title
-        const titles = {
-            'dashboard': 'Threat Intelligence Dashboard',
-            'lookup': 'Lookup & Analysis',
-            'history': 'Scan History',
-            'analytics': 'Analytics & Insights',
-            'settings': 'Settings & Configuration'
-        };
-        document.getElementById('page-title').textContent = titles[item.getAttribute('data-section')] || 'Dashboard';
-        
-        if (item.getAttribute('data-section') === 'analytics') {
-            load_analytics();
-        } else if (item.getAttribute('data-section') === 'history') {
-            load_history();
-        }
-    });
-});
-
-// ===== THEME TOGGLE =====
-function setup_theme() {
-    const saved_theme = localStorage.getItem('theme') || 'dark';
-    document.body.classList.toggle('light-mode', saved_theme === 'light');
-    themeToggle.textContent = saved_theme === 'light' ? '' : '';
-}
-
-themeToggle.addEventListener('click', () => {
-    const is_light = document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', is_light ? 'light' : 'dark');
-    themeToggle.textContent = is_light ? '' : '';
-});
-
 // ===== TIME DISPLAY =====
 function update_time() {
     const now = new Date();
     const timeString = now.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit',
+        minute: '2-digit',
         hour12: true 
     });
     const dateString = now.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric'
     });
-    timeDisplay.textContent = `${dateString} • ${timeString}`;
+    timeDisplay.textContent = `${dateString} — ${timeString}`;
 }
 setInterval(update_time, 1000);
 update_time();
@@ -91,22 +42,6 @@ lookupForm.addEventListener('submit', async (e) => {
     }
     
     await perform_lookup(query);
-});
-
-quickForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const query = quickQuery.value.trim();
-    
-    if (!query) {
-        show_status('Please enter a query', 'error');
-        return;
-    }
-    
-    queryInput.value = query;
-    quickQuery.value = '';
-    await perform_lookup(query);
-    
-    document.querySelector('[data-section="lookup"]').click();
 });
 
 async function perform_lookup(query) {
@@ -132,7 +67,7 @@ async function perform_lookup(query) {
         results_cache = data;
         
         render_results(data);
-        show_status(' Analysis complete', 'success');
+        show_status('Analysis complete', 'success');
         load_dashboard_stats();
         
     } catch (error) {
@@ -160,35 +95,61 @@ function render_results(data) {
         </div>
     `;
     
-    // Render result cards
+    // Render result cards - Threat Intel Sources
     resultsGrid.innerHTML = '';
     
+    // Threat Intelligence APIs
     if (results.virustotal) {
-        resultsGrid.appendChild(create_result_card('VirusTotal', '🦠', results.virustotal, 'vt'));
+        resultsGrid.appendChild(create_result_card('VirusTotal', 'shield', results.virustotal, 'vt'));
     }
     if (results.abuseipdb) {
-        resultsGrid.appendChild(create_result_card('AbuseIPDB', '⚠️', results.abuseipdb, 'abuse'));
+        resultsGrid.appendChild(create_result_card('AbuseIPDB', 'skull', results.abuseipdb, 'abuse'));
     }
     if (results.shodan) {
-        resultsGrid.appendChild(create_result_card('Shodan', '🔍', results.shodan, 'shodan'));
+        resultsGrid.appendChild(create_result_card('Shodan', 'globe-2', results.shodan, 'shodan'));
     }
     if (results.otx) {
-        resultsGrid.appendChild(create_result_card('AlienVault OTX', '🎯', results.otx, 'otx'));
+        resultsGrid.appendChild(create_result_card('AlienVault OTX', 'activity', results.otx, 'otx'));
     }
     if (results.urlhaus) {
-        resultsGrid.appendChild(create_result_card('URLhaus', '🔗', results.urlhaus, 'urlhaus'));
+        resultsGrid.appendChild(create_result_card('URLhaus', 'link', results.urlhaus, 'urlhaus'));
+    }
+    
+    // Phase 1 APIs - Domain Intelligence
+    if (results.whois) {
+        resultsGrid.appendChild(create_result_card('WHOIS Registry', 'file-search', results.whois, 'whois'));
+    }
+    if (results.dns) {
+        resultsGrid.appendChild(create_result_card('DNS Records', 'server', results.dns, 'dns'));
+    }
+    if (results.ssl) {
+        resultsGrid.appendChild(create_result_card('SSL Certificate', 'lock', results.ssl, 'ssl'));
     }
 }
 
-function create_result_card(title, icon, data, source) {
+function create_result_card(title, icon_name, data, source) {
     const card = document.createElement('div');
     card.className = 'result-card';
+    
+    // Icon SVG map - embedded for reliability
+    const iconMap = {
+        'shield': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+        'skull': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="1"></circle><circle cx="15" cy="9" r="1"></circle><path d="M8 20h8a2 2 0 0 0 2-2v-2H6v2a2 2 0 0 0 2 2z"></path><path d="M7 12a5 5 0 0 0 10 0"></path><path d="M5 8a7 7 0 0 1 14 0"></path></svg>',
+        'globe-2': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 1 0 20"></path><path d="M2 12h20"></path></svg>',
+        'activity': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
+        'link': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
+        'file-search': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="14" r="5"></circle><path d="M14.12 14l3.07 3.07"></path><path d="M15 3h-6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"></path><line x1="9" y1="8" x2="15" y2="8"></line><line x1="9" y1="11" x2="15" y2="11"></line></svg>',
+        'server': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8"></rect><rect x="2" y="14" width="20" height="8"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>',
+        'lock': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
+    };
+    
+    const icon_html = iconMap[icon_name] || iconMap['shield'];
     
     if (!data || !data.valid) {
         card.innerHTML = `
             <div class="result-header">
-                <span class="icon">${icon}</span>
-                <h3>${title}</h3>
+                <div class="icon">${icon_html}</div>
+                <h3>${title.toUpperCase()}</h3>
             </div>
             <div class="result-body">
                 <p class="empty-state">No data or error: ${data?.error || 'Unknown error'}</p>
@@ -275,12 +236,84 @@ function create_result_card(title, icon, data, source) {
                 <div class="result-value">${data.status || 'Unknown'}</div>
             </div>
         `;
+    } else if (source === 'whois') {
+        const records = data.raw || {};
+        content_html = `
+            <div class="result-item">
+                <div class="result-label">Registrar</div>
+                <div class="result-value">${data.registrar || 'Unknown'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Creation Date</div>
+                <div class="result-value">${data.creation_date || 'N/A'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Expiration Date</div>
+                <div class="result-value">${data.expiration_date || 'N/A'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Registrant Country</div>
+                <div class="result-value">${data.registrant_country || 'Unknown'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Name Servers</div>
+                <div class="result-value">${data.name_servers?.length > 0 ? data.name_servers.join(', ') : 'None'}</div>
+            </div>
+        `;
+    } else if (source === 'dns') {
+        const records = data.records || {};
+        const a_records = records.A || [];
+        const aaaa_records = records.AAAA || [];
+        const mx_records = records.MX || [];
+        content_html = `
+            <div class="result-item">
+                <div class="result-label">A Records (IPv4)</div>
+                <div class="result-value">${a_records.length > 0 ? a_records.join(', ') : 'None'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">AAAA Records (IPv6)</div>
+                <div class="result-value">${aaaa_records.length > 0 ? aaaa_records.join(', ') : 'None'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">MX Records (Mail)</div>
+                <div class="result-value">${mx_records.length > 0 ? mx_records.slice(0, 3).join(', ') : 'None'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">NS Records</div>
+                <div class="result-value">${records.NS?.length > 0 ? records.NS.slice(0, 2).join(', ') : 'None'}</div>
+            </div>
+        `;
+    } else if (source === 'ssl') {
+        const cert = data.certificate || {};
+        const subject = cert.subject || {};
+        content_html = `
+            <div class="result-item">
+                <div class="result-label">Subject CN</div>
+                <div class="result-value">${subject.CN || 'N/A'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Issuer</div>
+                <div class="result-value">${cert.issuer?.O || 'Unknown'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Valid From</div>
+                <div class="result-value">${cert.not_before || 'N/A'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Valid Until</div>
+                <div class="result-value">${cert.not_after || 'N/A'}</div>
+            </div>
+            <div class="result-item">
+                <div class="result-label">Algorithm</div>
+                <div class="result-value">${cert.signature_algorithm || 'N/A'}</div>
+            </div>
+        `;
     }
     
     card.innerHTML = `
         <div class="result-header">
-            <span class="icon">${icon}</span>
-            <h3>${title}</h3>
+            <div class="icon">${icon_html}</div>
+            <h3>${title.toUpperCase()}</h3>
         </div>
         <div class="result-body">
             ${content_html}
@@ -466,42 +499,36 @@ if (modalClose) {
 }
 
 // Close modal when clicking outside (backdrop)
-detailModal.addEventListener('click', (e) => {
-    if (e.target === detailModal) {
-        detailModal.classList.add('hidden');
-    }
-});
+if (detailModal) {
+    detailModal.addEventListener('click', (e) => {
+        if (e.target === detailModal) {
+            detailModal.classList.add('hidden');
+        }
+    });
+}
 
 // ===== QUICK QUERY VALIDATION =====
-// Add input validation to the quick form submit (already defined above at line 13)
-const originalQuickFormListener = quickForm.addEventListener;
-const quickFormElement = quickForm;
-
-if (quickFormElement) {
-    // Remove the old listener and add the validated one
-    const newQuickForm = quickFormElement.cloneNode(true);
-    quickFormElement.parentNode.replaceChild(newQuickForm, quickFormElement);
-    
-    newQuickForm.addEventListener('submit', async (e) => {
+// Optional quick form (only attach if present in DOM)
+const quickFormElement = document.getElementById('quick-form');
+const quickQuery = document.getElementById('quick-query');
+if (quickFormElement && quickQuery) {
+    quickFormElement.addEventListener('submit', async (e) => {
         e.preventDefault();
         const query = quickQuery.value.trim();
-        
-        // Input validation (max 255 characters, not empty)
+
         if (!query) {
             show_status('Please enter a query', 'error');
             return;
         }
-        
         if (query.length > 255) {
             show_status('Query too long (max 255 characters)', 'error');
             quickQuery.focus();
             return;
         }
-        
+
         queryInput.value = query;
         quickQuery.value = '';
         await perform_lookup(query);
-        document.querySelector('[data-section="lookup"]').click();
     });
 }
 
@@ -543,7 +570,8 @@ if (resetSettingsBtn) {
         if (confirm('Reset all settings to defaults?')) {
             localStorage.clear();
             document.body.classList.remove('light-mode');
-            themeToggle.textContent = '☀️';
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) themeToggle.textContent = '☀️';
             show_status('Settings reset to defaults', 'success');
         }
     });
@@ -562,6 +590,6 @@ if (clearDataBtn) {
 }
 
 // ===== INITIALIZE =====
-setup_theme();
+if (typeof setup_theme === 'function') setup_theme();
 load_dashboard_stats();
 setInterval(load_dashboard_stats, 30000);
