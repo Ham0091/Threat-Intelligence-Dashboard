@@ -106,6 +106,24 @@ Threat-Intelligence-Dashboard/
 └── tests/
 ```
 
+## Security: keeping API keys safe
+
+API keys are loaded exclusively from a `.env` file at startup. The `.env` file is listed in `.gitignore` and is **never committed to the repository**. Only `.env.example`, which contains placeholder values, is tracked by git.
+
+**Never paste a real API key directly into `app.py`, `static/script.js`, `templates/index.html`, or any other tracked file.**
+
+This repository includes automated safeguards:
+
+- **GitHub Actions** (`.github/workflows/secret-scan.yml`): every push and pull request is scanned for accidentally committed secrets using [detect-secrets](https://github.com/Yelp/detect-secrets). The CI job fails if any new, unaudited potential secret is introduced.
+
+- **Pre-commit hooks** (`.pre-commit-config.yaml`): developers can install local hooks that run the same scan before each commit:
+  ```bash
+  pip install pre-commit
+  pre-commit install
+  ```
+
+If you have already committed a real API key, treat it as **compromised** and rotate it immediately in each provider's developer portal before removing it from the git history.
+
 ## License
 
 MIT
