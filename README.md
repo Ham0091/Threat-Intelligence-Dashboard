@@ -2,7 +2,6 @@
 
 A Flask web app that queries multiple threat intelligence APIs for a given IP, domain, or URL and returns a composite threat score.
 
-![Dashboard screenshot](screenshot.png)
 
 ## What it does
 
