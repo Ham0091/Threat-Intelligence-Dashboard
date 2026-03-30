@@ -1,259 +1,112 @@
-# 🛡️ Threat Intelligence Dashboard
+# Threat Intelligence Dashboard
 
-A powerful, modern web-based threat intelligence platform for OSINT reconnaissance and security analysis. Query multiple threat intelligence sources simultaneously and get comprehensive threat assessments with intelligent risk scoring.
+A Flask web app that queries multiple threat intelligence APIs for a given IP, domain, or URL and returns a composite threat score.
 
-## ✨ Features
+![Dashboard screenshot](screenshot.png)
 
-### Core Intelligence Sources
-- **VirusTotal** - Malware detection, reputation scoring, and analysis
-- **AbuseIPDB** - IP abuse confidence scores and report history
-- **Shodan** - Open ports, services, and network reconnaissance
-- **GreyNoise** - Internet background noise filtering and IP context
-- **AlienVault OTX** - Threat pulse data and reputation tracking
-- **CrowdSec** - Community-driven IP reputation data
-- **URLhaus** - Malicious URL detection and threat classification
+## What it does
 
-### Dashboard Features
-- 🎯 **Single & Bulk Lookups** - Scan IPs, domains, and URLs
-- 📊 **Threat Scoring Algorithm** - Intelligent composite threat assessment (0-100)
-- 💾 **Persistent History** - SQLite database stores all scans with full context
-- 📈 **Analytics Dashboard** - Statistics and insights from your scans
-- 🎨 **Modern UI** - Glassmorphism design with dark/light mode
-- ⚡ **Intelligent Caching** - 1-hour cache reduces API calls
-- 🔐 **API Key Management** - Secure settings panel
-- 📤 **Export Data** - Save results as JSON
+Enter an IP address, domain, or URL and the app queries all configured sources in parallel, then returns the raw results alongside a weighted threat score from 0 to 100. Results are cached for one hour in a local SQLite database and scan history is persisted across restarts. The frontend streams results as each source responds so you see data as it arrives.
 
-### Advanced Features
-- **Threat Level Indicators** - Critical, High, Medium, Low classifications
-- **Real-time Status Updates** - Live feedback on analysis progress
-- **Responsive Design** - Works seamlessly on mobile, tablet, and desktop
-- **Keyboard Shortcuts** - Defang/refang utilities for safe sharing
-- **Quick Scans** - Dashboard quick-access lookup
-- **Comparison Functions** - Compare multiple threat profiles
-- **Rich Analytics** - Query type distribution and threat patterns
+## Data sources
 
-## 🚀 Quick Start
+| Source | What it provides | Free tier |
+|---|---|---|
+| VirusTotal | Malicious detection count, reputation score from security vendor scans | Yes (4 lookups/min) |
+| AbuseIPDB | Abuse confidence score and total report count for an IP | Yes (1,000 checks/day) |
+| GreyNoise | IP noise classification (benign/malicious/unknown), whether IP is internet scanner traffic | Yes |
+| CrowdSec | Community-sourced IP reputation, attack behaviors, overall score | Yes |
+| URLhaus | Whether a URL appears in the URLhaus malicious URL database | Yes (no key needed) |
+| IPInfo | Geolocation, hostname, ASN, and org for an IP | Yes (50,000 req/month) |
+| WHOIS | Domain registrar, creation date, expiration date, name servers | No key needed |
+| DNS | A, AAAA, MX, NS, TXT, SOA records for a domain | No key needed |
+| SSL | Certificate subject, issuer, and validity window for a domain | No key needed |
+| crt.sh | Subdomain enumeration from certificate transparency logs | No key needed |
 
-### Requirements
-- Python 3.8+
-- Modern web browser
+## Threat score
 
-### Installation
+The score is calculated in `calculate_threat_score()` and capped at 100.
 
-1. **Clone the repository**
+VirusTotal contributes 30%: the per-source sub-score is `min(100, malicious_detections × 3 + abs(reputation) × 2)` — capped at 100 before weighting — then multiplied by 0.30.
+
+AbuseIPDB contributes 30%: the raw `abuse_confidence_score` (0–100) multiplied by 0.30.
+
+GreyNoise adds flat points: +20 if the IP is classified malicious, +10 if it is tagged as internet background noise.
+
+CrowdSec adds flat points: +25 if the IP has a bad reputation flag, +15 if its overall score exceeds 50.
+
+URLhaus contributes 10%: 100 if a URL is listed as a threat, 0 otherwise, multiplied by 0.10.
+
+WHOIS, DNS, and SSL each contribute small adjustments (under 1.5 points total) based on missing records or certificates.
+
+## Setup
+
+1. Requires Python 3.8+ and pip.
+
+2. Clone the repository:
    ```bash
    git clone https://github.com/Ham0091/Threat-Intelligence-Dashboard.git
    cd Threat-Intelligence-Dashboard
    ```
 
-2. **Install dependencies**
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Configure API Keys**
+4. Copy the env template and fill in your API keys:
    ```bash
    cp .env.example .env
-   # Edit .env file with your API keys
    ```
 
-   Get API keys from:
-   - [VirusTotal](https://www.virustotal.com/gui/settings/api)
-   - [AbuseIPDB](https://www.abuseipdb.com/api)
-   - [Shodan](https://developer.shodan.io/)
-   - [GreyNoise](https://www.greynoise.io/)
-   - [AlienVault OTX](https://otx.alienvault.com/api)
-   - [CrowdSec](https://app.crowdsec.net/)
-   - [URLhaus](https://urlhaus.abuse.ch/) *(no key required)*
+5. Where to get each key:
+   - VirusTotal: https://www.virustotal.com/gui/settings/api
+   - AbuseIPDB: https://www.abuseipdb.com/api
+   - GreyNoise: https://www.greynoise.io/
+   - CrowdSec: https://app.crowdsec.net/
+   - IPInfo: https://ipinfo.io/
 
-4. **Run the application**
+6. Run the app:
    ```bash
    python app.py
    ```
+   Open http://localhost:5001 in a browser.
 
-5. **Open in browser**
-   ```
-   http://localhost:5001
-   ```
+## API keys: required vs optional
 
-## 📊 Threat Score Calculation
+VirusTotal and AbuseIPDB are effectively required for a useful score. Without those keys the app continues running but skips those sources, leaving up to 60% of the threat score unweighted. The result panels for those sources will show an error.
 
-The dashboard uses a weighted average algorithm:
-- **VirusTotal** (35%) - Malicious detections + reputation
-- **AbuseIPDB** (35%) - Abuse confidence score
-- **Shodan/GreyNoise** (20%) - Open port count and internet noise context
-- **URLhaus/CrowdSec** (10%) - Threat classification and community reputation
+GreyNoise, CrowdSec, and IPInfo degrade gracefully: those result panels will show an error but the rest of the results still return. URLhaus works without a key (the default value is `public`).
 
-**Score Interpretation:**
-- 🟢 **0-25**: Low Risk - Generally safe
-- 🟡 **25-50**: Medium Risk - Suspicious activity
-- 🟠 **50-70**: High Risk - Significant threats detected
-- 🔴 **70-100**: Critical - Severe threats detected
+WHOIS, DNS, SSL, and crt.sh require no keys and always run.
 
-## 🎮 Usage Guide
+## Known limitations
 
-### Dashboard
-- View overall statistics and metrics
-- Access quick lookup from anywhere
-- See recent scans at a glance
+- VirusTotal free tier is limited to 4 lookups per minute. Rapid successive queries will hit rate limits.
+- AbuseIPDB free tier allows 1,000 checks per day. Heavy usage will exhaust the quota quickly.
+- GreyNoise and CrowdSec only return useful data for IPs. They are skipped for domain and URL queries.
+- URLhaus is only queried for URL inputs. It does not check bare IPs or domains.
+- The threat score does not account for false positives. A high VirusTotal detection count on a well-known CDN IP will still produce a high score.
+- The 1-hour cache means re-scanning a recently checked indicator returns stale data.
+- crt.sh occasionally returns 503 errors and has no SLA for availability.
 
-### Lookup & Analysis
-1. Enter an IP address, domain, or URL
-2. Click "Analyze" to query all sources
-3. Review results and threat score
-4. Use "Defang" to make data safe for sharing
+## Project structure
 
-### Scan History
-- Browse all previous scans
-- Filter by query text
-- Quick re-scan of previous items
-
-### Analytics
-- View threat distribution charts
-- Analyze query patterns
-- Identify trends in reconnaissance
-
-### Settings
-- Add or update API keys
-- Configure preferences
-- Manage cached data
-- Export/import configurations
-
-## 🔌 API Endpoints
-
-### POST `/api/lookup`
-Perform a threat intelligence lookup
-```json
-{
-  "query": "1.1.1.1"
-}
-```
-
-### POST `/api/lookup/stream`
-Stream real-time results as each source responds
-
-### GET `/api/history?limit=50`
-Retrieve scan history
-
-### GET `/api/stats`
-Get dashboard statistics
-
-### POST `/api/export`
-Export scan results
-
-### POST `/api/compare`
-Compare multiple queries
-```json
-{
-  "queries": ["1.1.1.1", "8.8.8.8"]
-}
-```
-
-### GET `/api/health-check`
-Check API key configuration status
-
-### DELETE `/api/clear-history`
-Clear all scan history
-
-## 📝 Database Schema
-
-The SQLite database stores:
-- Query text and hash
-- Query type (IP, domain, URL)
-- Composite threat score
-- Full API response data
-- Scan timestamp
-- Cache expiration time
-
-## 🔒 Security Notes
-
-- API keys are stored in `.env` file (never commit to git)
-- Enable HTTPS in production (use nginx/reverse proxy)
-- Implement rate limiting for public deployments
-- Consider authentication for sensitive environments
-- Database contains scan history - encrypt in production
-
-## 🛠️ Development
-
-### Project Structure
 ```
 Threat-Intelligence-Dashboard/
-├── app.py              # Flask backend + database models
-├── requirements.txt    # Python dependencies
-├── .env.example        # API key template
+├── app.py
+├── requirements.txt
+├── .env.example
 ├── .gitignore
 ├── README.md
 ├── static/
-│   ├── style.css       # Modern dashboard styles
-│   └── script.js       # Frontend logic
+│   ├── style.css
+│   └── script.js
 ├── templates/
-│   └── index.html      # Main UI
-├── tests/              # Test suite
-└── threat_intel.db     # SQLite database (auto-created)
+│   └── index.html
+└── tests/
 ```
 
-### Tech Stack
-- **Backend**: Flask 3.0, SQLAlchemy 2.0
-- **Database**: SQLite
-- **Frontend**: Vanilla JavaScript, modern CSS Grid
-- **APIs Integrated**: VirusTotal, Shodan, AbuseIPDB, GreyNoise, CrowdSec, OTX, URLhaus
+## License
 
-## 📦 Dependencies
-
-- `flask` - Web framework
-- `flask-cors` - Cross-origin support
-- `flask-limiter` - Rate limiting
-- `requests` - HTTP library
-- `python-dotenv` - Environment variables
-- `sqlalchemy` - ORM database toolkit
-- `python-whois` - Domain WHOIS lookups
-- `pyOpenSSL` - SSL certificate handling
-- `dnspython` - DNS queries
-
-## 🚨 Troubleshooting
-
-**Issue**: "API key not configured" error
-- **Solution**: Copy `.env.example` to `.env` and add your API keys
-
-**Issue**: Database locked error
-- **Solution**: Restart the application
-
-**Issue**: API rate limiting
-- **Solution**: The built-in caching (1-hour TTL) helps; upgrade API plans if needed
-
-**Issue**: Slow response times
-- **Solution**: Check your internet connection; some APIs may be slow
-
-## 🐛 Known Limitations
-
-- Free API tiers may have rate limits
-- Some data requires paid API plans
-- URLhaus and OTX are optional (gracefully degrade)
-- Bulk scanning not yet optimized for 1000+ IPs
-
-## 🔮 Future Enhancements
-
-- [ ] GraphQL API endpoint
-- [ ] Advanced threat hunting workflow
-- [ ] Visual relationship graphs (NetworkX)
-- [ ] CSV/PDF export functionality
-- [ ] Email alerts for critical threats
-- [ ] Machine learning-based threat detection
-- [ ] Integration with SIEM systems
-- [ ] Docker containerization
-
-## 📄 License
-
-MIT License - Feel free to use and modify
-
-## 🤝 Contributing
-
-Contributions welcome! Submit pull requests or open issues for bugs and feature requests.
-
-## 📧 Support
-
-For issues or questions, open a GitHub issue or contact the maintainers.
-
----
-
-**Made with ❤️ for the security research community**
+MIT
